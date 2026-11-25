@@ -1,5 +1,5 @@
 # Use the FrankenPHP image for building/running composer
-FROM ghcr.io/mintopia/php-frankenphp-base:8.4.10 AS composer
+FROM ghcr.io/mintopia/php:8.4-alpine-cli AS composer
 
 WORKDIR /app/
 ENV HOME=/tmp
@@ -16,7 +16,7 @@ RUN composer install \
         --ignore-platform-reqs
 
 # Use the node23 image to do an npm install
-FROM node:23-slim AS npm
+FROM node:24-slim AS npm
 
 WORKDIR /app/
 ENV HOME=/tmp
@@ -30,16 +30,11 @@ RUN npm install --production=false && \
     npm run build
 
 # Now our final image
-FROM ghcr.io/mintopia/php-frankenphp-base:8.4.10
+FROM ghcr.io/mintopia/php:8.4-alpine-frankenphp
 LABEL org.opencontainers.image.authors="jess@mintopia.net"
 
 COPY --from=npm /app /app
-COPY docker/production/entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh && \
+COPY docker/production/00-entrypoint.sh /docker-entrypoint.d/00-entrypoint.sh
+RUN chmod +x /docker-entrypoint.d/00-entrypoint.sh && \
     mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" && \
     echo 'memory_limit = 512M' > /usr/local/etc/php/conf.d/memory_limit.ini
-
-COPY docker/Caddyfile /
-
-ENTRYPOINT ["/entrypoint.sh"]
-CMD ["php",  "artisan",  "octane:frankenphp", "--caddyfile=/Caddyfile", "--admin-host=0.0.0.0", "--port=80"]
